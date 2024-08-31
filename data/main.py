@@ -20,23 +20,21 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 icon_path = os.path.join(script_dir, "icon_app.ico")
 
 try:
-    response = requests.get("https://github.com/CesarGarza55/SourceViewer/releases/latest")
-    response.raise_for_status()  # Verifica si la solicitud fue exitosa
-    latest_release = response.json()
-    latest_version = latest_release
+    # Obtener la información de la última versión de GitHub
+    update = requests.get("https://api.github.com/repos/CesarGarza55/SourceViewer/releases/latest")
+    latest_release = update.json()["tag_name"]
 
-    if latest_version > version:
+    if latest_release > version:
         root = tk.Tk()
         root.withdraw()
-        if messagebox.askyesno("Update", "A new version is available. Would you like to download it?"):
+        if messagebox.askyesno("Update", f"A new version {latest_release} is available. Would you like to download it?"):
             messagebox.showinfo("Download", "Please select the download location.")
             download_location = filedialog.askdirectory()
             if download_location:
                 messagebox.showinfo("Download", "The download is in progress, please wait...")
-                download_url = latest_release["assets"][0]["browser_download_url"]
-                r = requests.get(download_url, allow_redirects=True)
-                r.raise_for_status()  # Verifica si la descarga fue exitosa
-                with open(os.path.join(download_location, f'{appname}-{latest_version}.exe'), 'wb') as f:
+                # Descargar el archivo ejecutable más reciente
+                r = requests.get(f"https://github.com/CesarGarza55/SourceViewer/releases/latest/download/SourceViewer.exe", allow_redirects=True)
+                with open(f'{download_location}/{appname}-{latest_release}.exe', 'wb') as f:
                     f.write(r.content)
                 messagebox.showinfo("Download", "The download has been completed successfully.")
                 sys.exit()
@@ -45,6 +43,7 @@ except requests.RequestException as e:
     print("Network error:", e)
 except Exception as e:
     print("Error:", e)
+
 
 
 if os.path.exists(f'{user_data_path}'):
