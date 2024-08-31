@@ -1,0 +1,7 @@
+pyinstaller
+opencv-python
+pyaudio
+customtkinter
+Pillow
+pygrabber
+comtypes
