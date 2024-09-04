@@ -10,18 +10,23 @@ This project was born from the small number of applications that allow you to vi
 
 - **Video Source Selection**: Detect and select from available video input devices.
 - **Audio Source Selection**: Detect and select from available audio input devices.
+- **Audio Output Selector**: Detects and select from available audio output devices.
+- **Resolution selector**: Select from a variety of resolution options.
+- **FPS selector**: Select from a variety of FPS options.
 - **Fullscreen Mode**: View video sources in fullscreen mode.
 - **Download Latest Version**: Automatic detection of updates with the option to download the latest release.
 
 ## Requirements
 
 - Python 3.12.x
+- [pyinstaller](https://pypi.org/project/pyinstaller/)
 - [OpenCV](https://pypi.org/project/opencv-python/)
 - [Pillow](https://pypi.org/project/Pillow/)
 - [pyaudio](https://pypi.org/project/PyAudio/)
 - [requests](https://pypi.org/project/requests/)
 - [customtkinter](https://pypi.org/project/customtkinter/)
 - [pygrabber](https://pypi.org/project/pygrabber/)
+- [ffmpegcv](https://pypi.org/project/ffmpegcv/)
 
 ## Compile
 
@@ -47,19 +52,28 @@ You can download the already compiled versions from the [releases section](https
 
 Example of use:
 
-![image](https://github.com/user-attachments/assets/99230d0d-a61a-4348-82c5-524bf3b978de)
+![image](https://github.com/user-attachments/assets/6ceadbdb-34a9-4ccb-8c76-3b57dac83288)
+
 
 ## How to Use
 
 1. **Start the Application**: Upon launching SourceViewer, you will be presented with options to select your video and audio sources.
-2. **Select Video/Audio Sources**: Use the dropdown menus to choose your preferred video and audio input devices.
-3. **Start Viewing**: Click the `Start` button to begin streaming video and audio. The video will appear in a new window.
-4. **Fullscreen Mode**: Toggle fullscreen mode by pressing the `Fullscreen` button or by pressing `F11` while in the video window.
-5. **Close Application**: To stop the video and audio streams, press the `Close` button.
+2. **Select Video/Audio Sources/Audio Output**: Use the dropdown menus to choose your preferred video and audio input devices and the output.
+3. **Select the resolution and FPS**: Use the dropdown menus to choose your preferred resolution and FPS options.
+4. **Start Viewing**: Click the `Start` button to begin streaming video and audio. The video will appear in a new window.
+5. **Fullscreen Mode**: Toggle fullscreen mode by pressing the `Fullscreen` button or by pressing `F` while in the video window.
+6. **Close**: To stop the video and audio streams, press `ESC` or close the video window.
 
 ## Update Notification
 
 SourceViewer automatically checks for updates in the GitHub repository. If a new version is available, you will be prompted to download it when you launch the application.
+
+## Bugs
+
+SourceViewer is a personal project and is not intended to compete with professional projects like OBS or VLC. My proposal is a simple and brief solution for my own use, which I decided to share. I spent several hours trying to fix the bug that is currently present, but I couldn't solve it. I know it's probably something very simple, and if I can, I will fix it soon.
+
+![image](https://github.com/user-attachments/assets/cfbf783b-e286-445e-afb9-0535e21d4679)
+
 
 ## Contributing
 
