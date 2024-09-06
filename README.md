@@ -54,7 +54,6 @@ Example of use:
 
 ![image](https://github.com/user-attachments/assets/6ceadbdb-34a9-4ccb-8c76-3b57dac83288)
 
-
 ## How to Use
 
 1. **Start the Application**: Upon launching SourceViewer, you will be presented with options to select your video and audio sources.
@@ -63,6 +62,13 @@ Example of use:
 4. **Start Viewing**: Click the `Start` button to begin streaming video and audio. The video will appear in a new window.
 5. **Fullscreen Mode**: Toggle fullscreen mode by pressing the `Fullscreen` button or by pressing `F` while in the video window.
 6. **Close**: To stop the video and audio streams, press `ESC` or close the video window.
+
+## Test
+
+Version 1.1.0 has been tested with a generic HDMI to USB capture card while playing Ninja Gaiden 3: Razor's Edge on a Nintendo Switch®.
+
+![2024-09-05 23-49-42](https://github.com/user-attachments/assets/6a95084c-2b72-4b02-9046-8064787b0f77)
+
 
 ## Update Notification
 
