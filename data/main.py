@@ -1,20 +1,49 @@
-import json, cv2, os, threading, pyaudio, sys, subprocess, unicodedata, webbrowser, requests
+import json, cv2, os, threading, pyaudio, sys, subprocess, unicodedata, webbrowser, requests, time
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from pygrabber.dshow_graph import FilterGraph
+import pygame
+import numpy as np
+from pygame import FULLSCREEN, RESIZABLE, HWSURFACE, DOUBLEBUF
+import variables
 
 list_video = []
 selected_device = None
 # Application name and data path
-version = "1.1.0"
+version = "1.2.0"
 appname = "SourceViewer"
 appdata = os.environ["APPDATA"]
 directory = os.path.join(appdata, appname)
 user_data_path = os.path.join(directory, "settings.json")
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-icon_path = os.path.join(script_dir, "icon_app.ico")
+icon_path = variables.icon_path
+video_icon_path = variables.video_icon_path
+
+saved_video_source = 0
+saved_audio_source = 0
+saved_audio_output = 0
+saved_fullscreen = False
+saved_resolutions = "1280x720"
+saved_fps_options = "30"
+saved_fps_check = False
+
+# Function to write a log file
+def write_log(text = "", log_type = "latest"):
+    text = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {text}\n"
+    os.makedirs(f'{directory}/logs', exist_ok=True)
+    with open(f'{directory}/logs/{log_type}.log', 'a') as f:
+        f.write(text)
+
+# Function to handle exceptions and show a messagebox with the error instead of crashing the application directly
+def handle_exception(exc_type, exc_value, exc_traceback):
+    # Log the exception
+    write_log(f"Exception: {exc_type}, {exc_value}", "exception")
+    # Show the exception in a messagebox
+    # messagebox.showerror("Error", lang(current_language,"error_occurred") + f"\n{exc_type}: {exc_value}")
+
+# Set the exception hook to the handle_exception function
+sys.excepthook = handle_exception
 
 # Check if FFmpeg is installed
 def check_ffmpeg_installed():
@@ -40,30 +69,76 @@ def check_ffmpeg_installed():
 check_ffmpeg_installed()
 
 import ffmpegcv as fc
-try:
-    # Obtain the latest version of the application
-    update = requests.get("https://api.github.com/repos/CesarGarza55/SourceViewer/releases/latest")
-    latest_release = update.json()["tag_name"]
 
-    if latest_release > version:
-        root = tk.Tk()
-        root.withdraw()
-        if messagebox.askyesno("Update", f"A new version {latest_release} is available. Would you like to download it?"):
-            messagebox.showinfo("Download", "Please select the download location.")
-            download_location = filedialog.askdirectory()
-            if download_location:
-                messagebox.showinfo("Download", "The download is in progress, please wait...")
-                # Download the latest version of the application
-                r = requests.get(f"https://github.com/CesarGarza55/SourceViewer/releases/latest/download/SourceViewer.exe", allow_redirects=True)
-                with open(f'{download_location}/{appname}-{latest_release}.exe', 'wb') as f:
-                    f.write(r.content)
-                messagebox.showinfo("Download", "The download has been completed successfully.")
-                sys.exit()
-        root.destroy()
-except requests.RequestException as e:
-    messagebox.showerror("Network error:", e)
-except Exception as e:
-    messagebox.showerror("Error:", e)
+def center_window(window):
+    window.update()
+    width = window.winfo_width()
+    height = window.winfo_height()
+    x = (window.winfo_screenwidth() // 2) - (width // 2)
+    y = (window.winfo_screenheight() // 2) - (height // 2)
+    window.geometry(f'{width}x{height}+{x}+{y}')
+
+def download_file(url, dest, progress_window, progress_var, progress_bar, progress_label):
+    response = requests.get(url, stream=True)
+    total_size = int(response.headers.get('content-length', 0)) or 1
+    block_size = 1024
+    downloaded_size = 0
+    
+    with open(dest, 'wb') as file:
+        for data in response.iter_content(block_size):
+            if progress_window.winfo_exists():
+                file.write(data)
+                downloaded_size += len(data)
+                progress = (downloaded_size / total_size) * 100
+                progress_var.set(progress)
+                progress_bar['value'] = progress
+                progress_label.config(text=f"{int(progress)}%")
+                progress_window.update()
+            else:
+                return False
+    return True
+
+def check_update():
+    try:
+        response = requests.get("https://github.com/CesarGarza55/SourceViewer/releases/latest")
+        latest_version = response.url.split('/')[-1]
+
+        if latest_version > version:
+            root = tk.Tk()
+            root.withdraw()
+            if messagebox.askyesno("Update", f"Version {latest_version} is available. Download?"):
+                download_location = filedialog.askdirectory()
+                if download_location:
+                    progress_window = tk.Toplevel(root)
+                    center_window(progress_window)
+                    progress_window.title("Downloading Update")
+                    progress_window.geometry("300x150")
+                    progress_window.resizable(False, False)
+                    progress_window.attributes('-topmost', True)
+                    progress_window.iconbitmap(icon_path)
+                    
+                    tk.Label(progress_window, text="Downloading update...").pack(pady=10)
+                    progress_var = tk.DoubleVar()
+                    progress_bar = ttk.Progressbar(progress_window, variable=progress_var, maximum=100)
+                    progress_bar.pack(pady=10, padx=20, fill=tk.X)
+                    progress_label = tk.Label(progress_window, text="0%")
+                    progress_label.pack()
+                    
+                    
+                    url = f"https://github.com/CesarGarza55/SourceViewer/releases/latest/download/SourceViewer.exe"
+                    dest = f'{download_location}/SourceViewer-{latest_version}.exe'
+                    
+                    if download_file(url, dest, progress_window, progress_var, progress_bar, progress_label):
+                        progress_window.destroy()
+                        messagebox.showinfo("Success", "Update downloaded successfully!")
+                        os.system(f'start {dest}')
+                        sys.exit()
+            root.destroy()
+    except Exception as e:
+        messagebox.showerror("Error", f"Update check failed: {str(e)}")
+
+# Check for updates
+check_update()
 
 if os.path.exists(f'{user_data_path}'):
     with open(f'{directory}/settings.json', 'r') as f:
@@ -74,6 +149,7 @@ if os.path.exists(f'{user_data_path}'):
         saved_fullscreen = user_data.get('fullscreen', False)
         saved_resolutions = user_data.get('resolutions', "1280x720")
         saved_fps_options = user_data.get('fps_options', "30")
+        saved_fps_check = user_data.get('show_fps', False)
 else:
     os.makedirs(f'{directory}', exist_ok=True)
     with open(user_data_path, 'w') as f:
@@ -91,8 +167,8 @@ class VideoApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{appname} - Settings")
-        window_width = 300
-        window_height = 425
+        window_width = 400
+        window_height = 650
         x_position = 50
         y_position = 50
         self.root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
@@ -100,11 +176,12 @@ class VideoApp:
         self.root.iconbitmap(icon_path)
 
         # Variables
-        global saved_video_source, saved_audio_source, saved_audio_output, saved_fullscreen
+        global saved_video_source, saved_audio_source, saved_audio_output, saved_fullscreen, saved_resolutions, saved_fps_options, saved_fps_check
         self.video_source = saved_video_source
         self.audio_source = saved_audio_source
         self.audio_output = saved_audio_output
         self.is_fullscreen = saved_fullscreen
+        self.show_fps = saved_fps_check
         self.cap = None
         self.audio_stream = None
         self.audio_output_stream = None
@@ -115,62 +192,122 @@ class VideoApp:
         self.info_window = None
         self.help_window = None
 
-        # Frame for controls in the main window
-        self.control_frame = ctk.CTkFrame(self.root)
-        self.control_frame.pack(fill=ctk.BOTH, expand=True)
+        # Main container
+        self.main_frame = ctk.CTkFrame(self.root)
+        self.main_frame.pack(fill=ctk.BOTH, expand=True, padx=15, pady=15)  # Reduced padding
 
-        # Combobox to select the video source
-        self.video_sources = ctk.CTkComboBox(self.control_frame, state="readonly", command=lambda x: self.save_settings())
-        self.video_sources.pack(pady=(40, 10), fill=ctk.BOTH, expand=True)
+        # Title and controls in same row
+        self.header_frame = ctk.CTkFrame(self.main_frame)
+        self.header_frame.pack(fill=ctk.X, pady=(0, 15))
+        
+        self.title_label = ctk.CTkLabel(
+            self.header_frame, 
+            text=appname,
+            font=("Arial Bold", 24)
+        )
+        self.title_label.pack(side=ctk.LEFT, padx=10)
 
-        # Combobox to select the audio source
-        self.audio_sources = ctk.CTkComboBox(self.control_frame, state="readonly", command=lambda x: self.save_settings())
-        self.audio_sources.pack(pady=10, fill=ctk.BOTH, expand=True)
+        # Help and Info buttons with better contrast
+        self.help_btn = ctk.CTkButton(
+            self.header_frame,
+            text="?",
+            width=30,
+            height=30,
+            command=self.show_help,
+            corner_radius=15,
+            fg_color="#3d3d3d",
+            hover_color="#4d4d4d"
+        )
+        self.help_btn.pack(side=ctk.RIGHT, padx=(0,5))
 
-        # Combobox to select the audio output
-        self.audio_outputs = ctk.CTkComboBox(self.control_frame, state="readonly", command=lambda x: self.save_settings())
-        self.audio_outputs.pack(pady=10, fill=ctk.BOTH, expand=True)
+        self.info_btn = ctk.CTkButton(
+            self.header_frame,
+            text="i",
+            width=30,
+            height=30,
+            command=self.show_info,
+            corner_radius=15,
+            fg_color="#3d3d3d",
+            hover_color="#4d4d4d"
+        )
+        self.info_btn.pack(side=ctk.RIGHT, padx=5)
 
-        # Combobox to select the resolution
-        self.resolutions = ctk.CTkComboBox(self.control_frame, state="readonly", command=lambda x: self.save_settings())
-        self.resolutions.pack(pady=10, fill=ctk.BOTH, expand=True)
+        # Sources frame
+        self.sources_frame = ctk.CTkFrame(self.main_frame)
+        self.sources_frame.pack(fill=ctk.X, pady=(0, 15))
 
-        # Combobox to select the FPS
-        self.fps_options = ctk.CTkComboBox(self.control_frame, state="readonly", command=lambda x: self.save_settings())
-        self.fps_options.pack(pady=10, fill=ctk.BOTH, expand=True)
+        # Create combo boxes
+        self.video_sources = ctk.CTkComboBox(self.sources_frame)
+        self.audio_sources = ctk.CTkComboBox(self.sources_frame)
+        self.audio_outputs = ctk.CTkComboBox(self.sources_frame)
 
-        # Button to start video capture
-        self.start_btn = ctk.CTkButton(self.control_frame, text="Start", command=self.open_video_window)
-        self.start_btn.configure(fg_color="green", hover_color="darkgreen")
-        self.start_btn.pack(pady=10, fill=ctk.BOTH, expand=True)
+        labels = ["Video Source:", "Audio Input:", "Audio Output:"]
+        combos = [self.video_sources, self.audio_sources, self.audio_outputs]
 
-        # Full screen button
-        self.fullscreen_btn = ctk.CTkButton(self.control_frame, text="Fullscreen", command=self.toggle_fullscreen)
-        self.fullscreen_btn.pack(pady=10, fill=ctk.BOTH, expand=True)
-        self.fullscreen_btn.configure(state=ctk.DISABLED)
+        for label_text, combo in zip(labels, combos):
+            ctk.CTkLabel(self.sources_frame, text=label_text, anchor="w").pack(pady=(8,0), padx=10)
+            combo.configure(state="readonly", command=lambda x: self.save_settings())
+            combo.pack(pady=(0,8), padx=10, fill=ctk.X)
 
-        # Close button
-        self.close_btn = ctk.CTkButton(self.control_frame, text="Close", command=self.close_window)
-        self.close_btn.pack(pady=10, fill=ctk.BOTH, expand=True)
+        # Settings frame
+        self.settings_frame = ctk.CTkFrame(self.main_frame)
+        self.settings_frame.pack(fill=ctk.X, pady=(0, 15))
 
-        # Info button (small and at the top right)
-        self.info_btn = ctk.CTkButton(self.root, text="i", width=20, height=20, command=self.show_info)
-        self.info_btn.place(relx=1.0, rely=0.0, anchor="ne", x=0, y=10)
+        # Create combo boxes
+        self.resolutions = ctk.CTkComboBox(self.settings_frame)
+        self.fps_options = ctk.CTkComboBox(self.settings_frame)
 
-        # Help button (small and at the top right)
-        self.help_btn = ctk.CTkButton(self.root, text="?", width=20, height=20, command=self.show_help)
-        self.help_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-25, y=10)
+        settings_labels = ["Resolution:", "Frame Rate:"]
+        settings_combos = [self.resolutions, self.fps_options]
 
-        # Title label
-        self.title_label = ctk.CTkLabel(self.control_frame, text="Visualize your video and audio sources")
-        self.title_label.place(relx=0.0, rely=0.0, anchor="nw", x=5, y=5)
+        for label_text, combo in zip(settings_labels, settings_combos):
+            ctk.CTkLabel(self.settings_frame, text=label_text, anchor="w").pack(pady=(8,0), padx=10)
+            combo.configure(state="readonly", command=lambda x: self.save_settings())
+            combo.pack(pady=(0,8), padx=10, fill=ctk.X)
 
-        # Detect available video and audio sources
+        # Controls frame
+        self.controls_frame = ctk.CTkFrame(self.main_frame)
+        self.controls_frame.pack(fill=ctk.X)
+
+        # Create Show FPS checkbox
+        self.show_fps_var = tk.IntVar()
+        self.show_fps_var.set(0)
+        self.show_fps_check = ctk.CTkCheckBox(
+            self.controls_frame,
+            text="Show FPS",
+            variable=self.show_fps_var,
+            command=lambda: self.save_settings()
+        )
+        self.show_fps_check.pack(pady=(8,0), padx=10, fill=ctk.X)
+
+        # Create buttons
+        buttons = [
+            ("Start", self.open_video_window, "#2ea043", "#3fae54", 4),
+            ("Test Resolutions", self.show_test_results, None, None, 4),
+            ("Close", self.close_window, "#d93848", "#e94858", 4)
+        ]
+
+        for text, cmd, fg, hover, pady in buttons:
+            btn = ctk.CTkButton(
+                self.controls_frame,
+                text=text,
+                command=cmd,
+                fg_color=fg if fg else None,
+                hover_color=hover if hover else None,
+                state=ctk.DISABLED if text == "Fullscreen" else ctk.NORMAL
+            )
+            btn.pack(pady=pady, padx=10, fill=ctk.X)
+            if text == "Start": self.start_btn = btn
+            elif text == "Close": self.close_btn = btn
+            elif text == "Test Resolutions": self.test_btn = btn
+
+        # Initialize sources
         self.detect_video_sources()
         self.detect_audio_sources()
         self.detect_audio_outputs()
         self.detect_resolutions()
         self.detect_fps_options()
+        self.detect_fps_check()
 
         root.bind("<F11>", self.toggle_fullscreen_event)
 
@@ -187,6 +324,10 @@ class VideoApp:
         fps_options = ["15", "24", "30", "60", "75", "120", "240"]
         self.fps_options.configure(values=fps_options)
         self.fps_options.set(saved_fps_options)  # Set default FPS (30)
+
+    def detect_fps_check(self):
+        global saved_fps_check
+        self.show_fps_var.set(saved_fps_check)
 
     def save_settings(self):
         global saved_video_source, saved_audio_source, saved_audio_output
@@ -207,7 +348,8 @@ class VideoApp:
             'audio_output': saved_audio_output,
             'fullscreen': self.is_fullscreen,
             'resolutions': self.resolutions.get(),
-            'fps_options': self.fps_options.get()
+            'fps_options': self.fps_options.get(),
+            'show_fps': self.show_fps_var.get()
         }
         # Save data to a file
         with open(f'{user_data_path}', 'w') as f:
@@ -391,6 +533,166 @@ class VideoApp:
         self.video_source = int(selected_source.split()[1].replace(':', ''))
         self.set_video_source(self.video_source)
 
+    def show_test_results(self):
+        # Ask the user to confirm the test
+        if not messagebox.askyesno("Test Resolutions and FPS", "This will test all resolutions and FPS options for the selected video source to find stable combinations. This process may take a few minutes. Do you want to continue?"):
+            return
+        # Create a progress window
+        progress_window = ctk.CTkToplevel(self.root)
+        progress_window.title("Testing Resolutions and FPS")
+        progress_window.geometry("300x150")
+        progress_window.resizable(False, False)
+        progress_window.lift()  # Ensure the window is on top
+        progress_window.attributes("-topmost", True)  # Keep the window on top
+        self.root.after(200, lambda: progress_window.iconbitmap(icon_path))
+        
+        progress_label = ctk.CTkLabel(progress_window, text="Testing, please wait...", font=("Arial", 12))
+        progress_label.pack(pady=5)
+        
+        info_label = ctk.CTkLabel(progress_window, text="This will test all resolutions and FPS options, this process may take a few minutes.", font=("Arial", 12))
+        info_label.pack(pady=5)
+        info_label.configure(wraplength=280)
+        
+        progress_bar = ctk.CTkProgressBar(progress_window, mode='indeterminate')
+        progress_bar.pack(padx=20, pady=10, fill=ctk.X)
+        progress_bar.start()
+
+        # Flag to control the test execution
+        self.stop_test = False
+
+        def on_progress_window_close():
+            self.stop_test = True
+            progress_bar.stop()  # Stop the progress bar
+            progress_window.destroy()
+
+        progress_window.protocol("WM_DELETE_WINDOW", on_progress_window_close)
+
+        # Run the test in a separate thread to keep the UI responsive
+        def run_tests():
+            stable_combinations = self.test_resolutions_and_fps()
+            if self.stop_test:
+                return
+            
+            results_dict = {}
+            for res, fps in stable_combinations:
+                if res not in results_dict:
+                    results_dict[res] = fps
+                else:
+                    results_dict[res] = max(results_dict[res], fps)
+            
+            results = "\n".join([f"{res} up to {fps} FPS" for res, fps in results_dict.items()])
+            if not results:
+                results = "No stable combinations found."
+            
+            # Close the progress window
+            progress_bar.stop()  # Stop the progress bar
+            progress_window.destroy()
+            
+            # Create a new window to display the results
+            results_window = ctk.CTkToplevel(self.root)
+            results_window.title("Test Results")
+            results_window.geometry("400x300")
+            results_window.resizable(False, False)
+            results_window.lift()
+            results_window.attributes("-topmost", True)
+            results_window.after(200, lambda: results_window.iconbitmap(icon_path))
+            
+            results_label = ctk.CTkLabel(results_window, text="Stable Resolutions and FPS:", font=("Arial", 16))
+            results_label.pack(pady=10)
+
+            info_label = ctk.CTkLabel(results_window, text="The following resolutions and FPS options are stable for the selected video source:", font=("Arial", 14))
+            info_label.pack(pady=5)
+            info_label.configure(wraplength=380)
+            
+            results_text = ctk.CTkTextbox(results_window, wrap=ctk.WORD, font=("Arial", 16))
+            results_text.insert(ctk.END, results)
+            results_text.configure(state=ctk.DISABLED)
+            results_text.pack(padx=10, pady=10, fill=ctk.BOTH, expand=True)
+
+        # Start the test in a new thread
+        threading.Thread(target=run_tests).start()
+
+    def test_resolutions_and_fps(self):
+        #resolutions = ["640x480", "800x600", "1024x768", "1280x720", "1366x768", "1920x1080", "3840x2160"]
+        #fps_options = ["15", "24", "30", "60", "75", "120", "240"]
+        # For testing purposes, use a smaller set of resolutions and FPS options
+        resolutions = ["1280x720", "1920x1080"]
+        fps_options = ["30", "60"]
+        stable_combinations = []
+
+        for resolution in resolutions:
+            if self.stop_test:
+                break
+            width, height = map(int, resolution.split('x'))
+            for fps in fps_options:
+                if self.stop_test:
+                    break
+                fps = int(fps)
+                print(f"Testing {resolution} at {fps} FPS...")
+                if self.test_combination(width, height, fps):
+                    stable_combinations.append((resolution, fps))
+                    print(f"Stable: {resolution} at {fps} FPS")
+                else:
+                    print(f"Unstable: {resolution} at {fps} FPS")
+
+        return stable_combinations
+
+    def test_combination(self, width, height, fps):
+        pygame.init()
+        screen = pygame.display.set_mode((width, height), RESIZABLE | HWSURFACE | DOUBLEBUF | pygame.HIDDEN)
+        pygame.display.set_caption(f"Testing {width}x{height} @ {fps} FPS")
+        
+        clock = pygame.time.Clock()
+        
+        # Setting up video capture
+        self.set_video_source(self.video_source)
+        
+        self.cap = fc.VideoCaptureCAM(selected_device, camsize_wh=(width, height), camfps=fps)
+        
+        if not self.cap.isOpened():
+            print(f"Failed to open video capture device for {width}x{height} @ {fps} FPS")
+            pygame.quit()
+            return False
+
+        ret, frame = self.cap.read()
+        if not ret:
+            print(f"Failed to read frame from video capture device for {width}x{height} @ {fps} FPS")
+            self.cap.release()
+            pygame.quit()
+            return False
+
+        frame_count = 0
+        stable = True
+        fps_threshold = 0.8 * fps  # Adjust the threshold to 80% of the desired FPS
+
+        while frame_count < 60:  # Test for 60 frames
+            if self.stop_test:
+                stable = False
+                break
+            ret, frame = self.cap.read()
+            if not ret:
+                stable = False
+                break
+
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            surf = pygame.surfarray.make_surface(frame.swapaxes(0,1))
+            screen.fill((0,0,0))
+            screen.blit(surf, (0, 0))
+            pygame.display.flip()
+
+            clock.tick(fps)
+            actual_fps = clock.get_fps()
+            print(f"Frame: {frame_count}, Actual FPS: {actual_fps}, Threshold: {fps_threshold}")  # Debugging line
+            if frame_count > 12 and actual_fps < fps_threshold:  # Add delay before checking FPS stability
+                stable = False
+                break
+
+            frame_count += 1
+
+        self.cap.release()
+        pygame.quit()
+        return stable
+
     def open_video_window(self):
         # Make sure the video and audio source are updated before opening the video window
         self.change_video_source(None)
@@ -409,91 +711,260 @@ class VideoApp:
         self.video_thread.start()
         self.audio_thread.start()
 
+    def create_hint_overlay(self):
+        hint_texts = ["ESC: Close Video", "F: Toggle Fullscreen", "S: Show FPS"]
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.8
+        thickness = 2
+        padding = 10
+        
+        # Get text sizes to calculate overlay dimensions
+        text_sizes = [cv2.getTextSize(text, font, font_scale, thickness)[0] for text in hint_texts]
+        overlay_width = max(size[0] for size in text_sizes) + padding * 2
+        line_height = 40
+        overlay_height = len(hint_texts) * line_height
+        
+        # Create transparent overlay (4 channels - RGBA)
+        hint_overlay = np.zeros((overlay_height, overlay_width, 4), dtype=np.uint8)
+        
+        # Draw each line with background
+        for i, text in enumerate(hint_texts):
+            text_size = text_sizes[i]
+            x_pos = (overlay_width - text_size[0]) // 2
+            y_pos = (i * line_height) + 30
+            
+            # Calculate background rectangle coordinates
+            y1 = y_pos - text_size[1] - padding//2
+            y2 = y_pos + padding//2
+            x1 = x_pos - padding
+            x2 = x_pos + text_size[0] + padding
+            
+            # Draw black background for this line
+            hint_overlay[y1:y2, x1:x2, :3] = 0  # Black color
+            hint_overlay[y1:y2, x1:x2, 3] = 255  # Full opacity
+            
+            # Draw text in white
+            cv2.putText(hint_overlay, text, (x_pos, y_pos),
+                    font, font_scale, (255, 255, 255, 255), thickness)
+            # Make text fully opaque
+            text_mask = hint_overlay[:, :, 0] > 0  # Where text is white
+            hint_overlay[text_mask, 3] = 255
+        
+        return hint_overlay
+
     def update_video(self):
-        self.start_btn.configure(state=tk.DISABLED)
-        self.fullscreen_btn.configure(state=tk.NORMAL)
+        # Enable hardware acceleration
+        os.environ['SDL_HINT_RENDER_DRIVER'] = 'direct3d'
+        fullscreen = self.is_fullscreen
         width = int(self.resolutions.get().split('x')[0])
         height = int(self.resolutions.get().split('x')[1])
         fps = int(self.fps_options.get())
-        self.cap = fc.VideoCaptureCAM(selected_device, camsize_wh=(width, height), camfps=fps)
-        ret, frame = self.cap.read()
-
-        # Create a new window to display the video
-        cv2.namedWindow(appname, cv2.WND_PROP_FULLSCREEN)
-        cv2.resizeWindow(appname, width, height)
-        if self.is_fullscreen:
-            cv2.setWindowProperty(appname, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        try:
-            cv2.imshow(appname, frame)
-        except Exception as e:
-            messagebox.showerror("Error", "Error opening video source, try a lower resolution or frame rate option, your device may not support the selected resolution or frame rate.")
-            self.cap.release()
-            self.start_btn.configure(state=tk.NORMAL)
-            self.fullscreen_btn.configure(state=tk.DISABLED)
-            self.close_video_window()
-            return
-        prev_fullscreen_state = self.is_fullscreen
-        while cv2.getWindowProperty(appname, cv2.WND_PROP_VISIBLE) >= 1:
-            if self.cap is None:
-                self.cap = fc.VideoCaptureCAM(selected_device, camsize_wh=(width, height), camfps=fps)
-                if not self.cap.isOpened():
-                    messagebox.showerror("Error", f"Error: Failed to open video device {selected_device}")
-                    break
-            
-            if self.cap is not None:
-                ret, frame = self.cap.read()
-                if not ret or frame is None or frame.size == 0:
-                    messagebox.showerror("Error", "Error: Could not read the frame")
-                    self.cap.release()
-                    self.cap = None
-                else:
-                    window_width = cv2.getWindowImageRect(appname)[2]
-                    window_height = cv2.getWindowImageRect(appname)[3]
-                    aspect_ratio = width / height
-                    if window_width / window_height > aspect_ratio:
-                        new_height = window_height
-                        new_width = int(new_height * aspect_ratio)
-                    else:
-                        new_width = window_width
-                        new_height = int(new_width / aspect_ratio)
-                    frame = cv2.resize(frame, (new_width, new_height))
-                    
-                    # Add black borders to maintain aspect ratio
-                    top_border = (window_height - new_height) // 2
-                    bottom_border = window_height - new_height - top_border
-                    left_border = (window_width - new_width) // 2
-                    right_border = window_width - new_width - left_border
-                    frame = cv2.copyMakeBorder(frame, top_border, bottom_border, left_border, right_border, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-                    
-                    cv2.imshow(appname, frame)
-            
-            # Detect if the window is in full screen mode
-            if self.is_fullscreen != prev_fullscreen_state:
-                self.cap.release()
-                cv2.destroyAllWindows()
-                cv2.namedWindow(appname, cv2.WND_PROP_FULLSCREEN)
-                cv2.resizeWindow(appname, width, height)
-                if self.is_fullscreen:
-                    cv2.setWindowProperty(appname, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                self.cap = fc.VideoCaptureCAM(selected_device, camsize_wh=(width, height), camfps=fps)
-                ret, frame = self.cap.read()
-                if ret and frame is not None and frame.size != 0:
-                    cv2.imshow(appname, frame)
-                prev_fullscreen_state = self.is_fullscreen
-            
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # Escape key
-                if self.cap is not None:
-                    self.cap.release()
-                    self.start_btn.configure(state=tk.NORMAL)
-                    self.fullscreen_btn.configure(state=tk.DISABLED)
-                cv2.destroyAllWindows()
-                break
-            elif key == ord('f'):  # F key
-                self.toggle_fullscreen()
         
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+        # Force fullscreen CV2 if resolution matches monitor
+        if width == screen_width and height == screen_height:
+            fullscreen = True
+            self.is_fullscreen = True
+            pygame_active = False
+        else:
+            pygame_active = not fullscreen
+
+        self.start_btn.configure(state=tk.DISABLED)
+        
+        # Initialize camera
+        self.cap = fc.VideoCaptureCAM(selected_device, camsize_wh=(width, height), camfps=fps)
+        
+        ret, frame = self.cap.read()
+        if not ret:
+            messagebox.showerror("Error", "Failed to open the video capture device...")
+            self.close_video_window()
+            self.start_btn.configure(state=tk.NORMAL)
+            return
+        
+        clock = pygame.time.Clock()
+        running = True
+        original_size = (width, height)
+        pygame_active = not fullscreen
+        screen = None
+        font = None
+        
+        # Initialize based on mode
+        if fullscreen:
+            # Setup fullscreen CV2 window
+            cv2.namedWindow(appname, cv2.WND_PROP_FULLSCREEN)
+            cv2.setWindowProperty(appname, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        else:
+            # Initialize pygame for windowed mode
+            pygame.init()
+            screen = pygame.display.set_mode((width, height), RESIZABLE | HWSURFACE | DOUBLEBUF)
+            pygame.display.set_caption(appname)
+            pygame.display.set_icon(pygame.image.load(video_icon_path))
+            font = pygame.font.Font(None, 28)
+        
+        # Pre-create overlay for FPS display
+        fps_overlay = np.zeros((50, 150, 3), dtype=np.uint8)
+
+        # Add after mode initialization:
+        hint_overlay = self.create_hint_overlay()
+        hint_start_time = time.time()
+        hint_duration = 3.0  # seconds
+
+        while running and not self.stop_threads.is_set():
+            if pygame_active:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            if fullscreen:
+                                cv2.destroyWindow(appname)
+                                pygame_active = True
+                                pygame.init()
+                                screen = pygame.display.set_mode(original_size, RESIZABLE | HWSURFACE | DOUBLEBUF)
+                                pygame.display.set_caption(appname)
+                                pygame.display.set_icon(pygame.image.load(video_icon_path))
+                                font = pygame.font.Font(None, 28)  # Add font initialization
+                                fullscreen = False
+                            else:
+                                running = False
+                        elif event.key == pygame.K_f or event.key == pygame.K_F11:
+                            hint_start_time = time.time()
+                            fullscreen = not fullscreen
+                            self.is_fullscreen = fullscreen 
+                            self.save_settings()
+                            if fullscreen:
+                                pygame.display.quit()
+                                pygame_active = False
+                                font = None
+                            else:
+                                cv2.destroyWindow(appname)
+                                pygame_active = True
+                                pygame.init()
+                                screen = pygame.display.set_mode(original_size, RESIZABLE | HWSURFACE | DOUBLEBUF)
+                                pygame.display.set_caption(appname)
+                                pygame.display.set_icon(pygame.image.load(video_icon_path))
+                                font = pygame.font.Font(None, 28)  # Initialize font when switching to windowed
+                        elif event.key == pygame.K_s:
+                            self.show_fps_var.set(not self.show_fps_var.get())
+                            self.save_settings()
+                    elif event.type == pygame.VIDEORESIZE and not fullscreen:
+                        width, height = event.size
+                        screen = pygame.display.set_mode((width, height), RESIZABLE | HWSURFACE | DOUBLEBUF)
+                        original_size = (width, height)
+
+            ret, frame = self.cap.read()
+            current_time = time.time()
+            show_hint = current_time - hint_start_time < hint_duration
+            if ret:
+                if fullscreen:
+                    # Make a copy of the frame for modification
+                    display_frame = frame.copy()
+                    if show_hint:
+                        h, w = hint_overlay.shape[:2]
+                        y_pos = display_frame.shape[0] - h - 20
+                        x_pos = (display_frame.shape[1] - w) // 2
+                        
+                        # Extract region where we'll overlay the hint
+                        roi = display_frame[y_pos:y_pos+h, x_pos:x_pos+w]
+                        
+                        # Calculate alpha factor based on time
+                        alpha_factor = max(0, min(1, hint_duration - (current_time - hint_start_time)))
+                        
+                        # Blend only where the hint overlay is not transparent
+                        alpha_mask = (hint_overlay[:, :, 3] / 255.0) * alpha_factor
+                        alpha_mask = np.stack([alpha_mask] * 3, axis=2)
+                        
+                        # Blend the overlay with the frame
+                        roi_blend = (1.0 - alpha_mask) * roi + alpha_mask * hint_overlay[:, :, :3]
+                        display_frame[y_pos:y_pos+h, x_pos:x_pos+w] = roi_blend.astype(np.uint8)
+                    if self.show_fps_var.get():
+                        fps_overlay.fill(0)
+                        fps_text = f"FPS: {int(clock.get_fps())}"
+                        cv2.putText(fps_overlay, fps_text, (10, 30), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                        # Blend FPS overlay
+                        display_frame[0:50, 0:150] = cv2.addWeighted(
+                            display_frame[0:50, 0:150], 1.0,
+                            fps_overlay, 1.0, 0
+                        )
+                    
+                    cv2.namedWindow(appname, cv2.WND_PROP_FULLSCREEN)
+                    cv2.setWindowProperty(appname, cv2.WND_PROP_FULLSCREEN, 
+                                        cv2.WINDOW_FULLSCREEN)
+                    cv2.imshow(appname, display_frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('f') or key == ord('F'):
+                        if width != screen_width or height != screen_height:
+                            hint_start_time = time.time()
+                            fullscreen = False
+                            self.is_fullscreen = fullscreen
+                            self.save_settings()
+                            cv2.destroyWindow(appname)
+                            pygame_active = True
+                            pygame.init()
+                            screen = pygame.display.set_mode(original_size, RESIZABLE | HWSURFACE | DOUBLEBUF)
+                            pygame.display.set_caption(appname)
+                            pygame.display.set_icon(pygame.image.load(video_icon_path))
+                            font = pygame.font.Font(None, 28)
+                    elif key == ord('s') or key == ord('S'):
+                        self.show_fps_var.set(not self.show_fps_var.get())
+                        self.save_settings()
+                    elif key == 27:
+                        running = False
+                elif pygame_active:
+                    # Pygame windowed mode
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    surf = pygame.surfarray.make_surface(frame_rgb.swapaxes(0,1))
+                    
+                    screen_rect = screen.get_rect()
+                    frame_aspect = frame.shape[1] / frame.shape[0]
+                    screen_aspect = screen_rect.width / screen_rect.height
+                    
+                    if screen_aspect > frame_aspect:
+                        display_height = screen_rect.height
+                        display_width = int(display_height * frame_aspect)
+                    else:
+                        display_width = screen_rect.width
+                        display_height = int(display_width / frame_aspect)
+                    
+                    scaled_surface = pygame.transform.smoothscale(surf, (display_width, display_height))
+                    rect = scaled_surface.get_rect(center=screen_rect.center)
+                    
+                    screen.fill((0,0,0))
+                    screen.blit(scaled_surface, rect)
+                    
+                    if self.show_fps_var.get() and font is not None:  # Check if font exists
+                        fps_text = f"FPS: {int(clock.get_fps())}"
+                        text = font.render(fps_text, True, (255,255,255))
+                        screen.blit(text, (10, 10))
+
+                    # Show hint overlay
+                    if show_hint and font:
+                        hint_texts = ["S: Show FPS", "F: Toggle Fullscreen", "ESC: Close Video"]
+                        alpha = int(255 * max(0, min(1, hint_duration - (current_time - hint_start_time))))
+                        
+                        for i, text in enumerate(hint_texts):
+                            text_surf = font.render(text, True, (255,255,255), (0,0,0, alpha))
+                            text_rect = text_surf.get_rect(center=(screen_rect.centerx, screen_rect.bottom - 30 - i * 30))
+                            screen.blit(text_surf, text_rect)
+                            
+                    pygame.display.flip()
+                
+                current_size = original_size if not fullscreen else (frame.shape[1], frame.shape[0])
+                if pygame_active:
+                    pygame.display.set_caption(f"{appname} - {current_size[0]}x{current_size[1]} @ {fps} FPS")
+                
+                clock.tick(fps)
+
+        # Cleanup
+        if self.cap is not None:
+            self.cap.release()
+        if pygame_active:
+            pygame.quit()
+        cv2.destroyAllWindows()
         self.start_btn.configure(state=tk.NORMAL)
-        self.fullscreen_btn.configure(state=tk.DISABLED)
         self.close_video_window()
 
     def update_image(self, ctk_img):
@@ -565,60 +1036,143 @@ class VideoApp:
         if self.info_window is not None and self.info_window.winfo_exists():
             self.info_window.lift()
             return
-        # Create a new window with information about the application
+
         self.info_window = ctk.CTkToplevel(self.root)
         self.info_window.title("About")
         root.after(200, lambda: self.info_window.iconbitmap(icon_path))
-        window_width = 250
-        window_height = 200
+        
+        # Window setup
+        window_width = 400
+        window_height = 350
         screen_width = self.root.winfo_screenwidth()
-        x_position = int(screen_width / 2 - window_width / 2)
-        y_position = 50
+        screen_height = self.root.winfo_screenheight()
+        x_position = (screen_width - window_width) // 2
+        y_position = (screen_height - window_height) // 2
         self.info_window.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
         self.info_window.resizable(False, False)
-        info_text = (
-            f"{appname} "
-            "it's an application that allows you to view the video inputs available on your device.\n\n"
-            f"Version: {version}\n"
-            "Developed by: CesarGarza55"
-        )
-        
-        info_label = ctk.CTkLabel(self.info_window, text=info_text, font=("Arial", 16), wraplength=window_width-35)
-        info_label.pack(pady=20, padx=20)
-        def open_link(event):
-            webbrowser.open_new("https://github.com/CesarGarza55")
 
-        link_label = ctk.CTkLabel(self.info_window, text="https://github.com/CesarGarza55", text_color="#0067ee", cursor="hand2", font=("Arial", 14, "underline"))
-        link_label.pack(pady=10, padx=20)
-        link_label.bind("<Button-1>", open_link)
+        # App info section
+        title_label = ctk.CTkLabel(
+            self.info_window, 
+            text=appname,
+            font=("Arial Bold", 24)
+        )
+        title_label.pack(pady=(20,5))
+
+        version_label = ctk.CTkLabel(
+            self.info_window,
+            text=f"Version {version}",
+            font=("Arial", 14)
+        )
+        version_label.pack(pady=(0,15))
+
+        separator = ctk.CTkFrame(self.info_window, height=2)
+        separator.pack(fill="x", padx=20, pady=10)
+
+        desc_text = "Source Viewer is an application that allows you to visualize video and audio sources from your computer. It supports multiple video and audio sources, as well as different resolutions and frame rates."
+        desc_label = ctk.CTkLabel(
+            self.info_window,
+            text=desc_text,
+            font=("Arial", 12),
+            wraplength=350
+        )
+        desc_label.pack(pady=10, padx=25)
+
+                # Developer section
+        dev_frame = ctk.CTkFrame(self.info_window)
+        dev_frame.pack(pady=20, fill="x", padx=25)
+
+        creator_label = ctk.CTkLabel(
+            dev_frame,
+            text="Created by CesarGarza55",
+            font=("Arial Bold", 14)
+        )
+        creator_label.pack(pady=(5,2))
+
+        company_label = ctk.CTkLabel(
+            dev_frame,
+            text="A project by CodevBox",
+            font=("Arial", 13)
+        )
+        company_label.pack(pady=(0,5))
+
+        def open_website(event):
+            webbrowser.open_new("https://codevbox.com")
+
+        website_label = ctk.CTkLabel(
+            dev_frame,
+            text="https://codevbox.com",
+            text_color="#5ca3ff",
+            cursor="hand2",
+            font=("Arial", 12, "underline")
+        )
+        website_label.pack(pady=2)
+        website_label.bind("<Button-1>", open_website)
 
     def show_help(self):
         if self.help_window is not None and self.help_window.winfo_exists():
             self.help_window.lift()
             return
-        # Create a new window with information about the application
+
         self.help_window = ctk.CTkToplevel(self.root)
         self.help_window.title("Help")
         root.after(200, lambda: self.help_window.iconbitmap(icon_path))
-        window_width = 250
-        window_height = 200
+        
+        window_width = 400
+        window_height = 300
         screen_width = self.root.winfo_screenwidth()
-        x_position = int(screen_width / 2 - window_width / 2)
-        y_position = 50
+        screen_height = self.root.winfo_screenheight()
+        x_position = (screen_width - window_width) // 2
+        y_position = (screen_height - window_height) // 2
         self.help_window.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
         self.help_window.resizable(False, False)
-        info_text = (
-            "To start viewing the video input, select the video source and click the 'Start' button.\n\n"
-            "If you want to view the video source in full screen, press the 'Fullscreen' button or press the 'F' key while the video window is open."
+
+        # Title
+        title_label = ctk.CTkLabel(
+            self.help_window,
+            text="How to Use",
+            font=("Arial Bold", 24)
         )
-        
-        info_label = ctk.CTkLabel(self.help_window, text=info_text, font=("Arial", 16), wraplength=window_width-35)
-        info_label.pack(pady=20, padx=20)
+        title_label.pack(pady=20)
+
+        # Quick Start Section
+        quick_start = ctk.CTkLabel(
+            self.help_window,
+            text="Quick Start Guide",
+            font=("Arial Bold", 14)
+        )
+        quick_start.pack(pady=(0,10))
+
+        steps = [
+            "1. Select a video source from the dropdown menu",
+            "2. Select an audio source from the dropdown menu",
+            "3. Use the 'Start' button to open the video window",
+            "4. Use 'F' key or 'Fullscreen' button to toggle fullscreen mode",
+            "5. Use 'Esc' key to close the video window"
+        ]
+
+        for step in steps:
+            step_label = ctk.CTkLabel(
+                self.help_window,
+                text=step,
+                font=("Arial", 12),
+                justify="left"
+            )
+            step_label.pack(pady=5, padx=25, anchor="w")
 
 if __name__ == "__main__":
     ctk.set_appearance_mode("Dark")
     ctk.set_default_color_theme("blue")
 
     root = ctk.CTk()
+    
+    def on_closing():
+        # Close the window
+        app.close_window()
+        # Stop the video
+        pygame.quit()
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+    
     app = VideoApp(root)
     root.mainloop()

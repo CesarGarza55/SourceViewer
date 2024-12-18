@@ -1,7 +1,9 @@
-pyinstaller
+cx_Freeze
 opencv-python
 pyaudio
 customtkinter
 pygrabber
 requests
 ffmpegcv
+pygame
+numpy

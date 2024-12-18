@@ -1,4 +1,8 @@
-pip install -r data/requirements.txt
-pyinstaller --clean --workpath ./temp --noconfirm --onefile --windowed --specpath ./ --distpath ./ --icon "data\icon.ico" --add-data "data;." --name "SourceViewer" --hidden-import "comtypes.stream" "data\main.py"
-del SourceViewer.spec
-rmdir /s /q temp
+@echo off
+if exist output_build rmdir /s /q output_build
+py -m pip install -r data/requirements.txt
+python compile.py build
+
+echo SourceViewer compiled successfully.
+echo Press any key to exit...
+pause >nul

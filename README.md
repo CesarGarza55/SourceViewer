@@ -19,7 +19,7 @@ This project was born from the small number of applications that allow you to vi
 ## Requirements
 
 - Python 3.12.x
-- [pyinstaller](https://pypi.org/project/pyinstaller/)
+- [cx_Freeze](https://pypi.org/project/cx-Freeze/)
 - [OpenCV](https://pypi.org/project/opencv-python/)
 - [Pillow](https://pypi.org/project/Pillow/)
 - [pyaudio](https://pypi.org/project/PyAudio/)
@@ -27,6 +27,7 @@ This project was born from the small number of applications that allow you to vi
 - [customtkinter](https://pypi.org/project/customtkinter/)
 - [pygrabber](https://pypi.org/project/pygrabber/)
 - [ffmpegcv](https://pypi.org/project/ffmpegcv/)
+- [pygame](https://pypi.org/project/pygame/)
 
 ## Compile
 
@@ -43,7 +44,7 @@ This project was born from the small number of applications that allow you to vi
 
 3. Compile:
    ```sh
-   pyinstaller --clean --workpath ./temp --noconfirm --onefile --windowed --specpath ./ --distpath ./ --icon "data\icon.ico" --add-data "data;." --name "SourceViewer" --hidden-import "comtypes.stream" "data\main.py"
+   python compile.py build
    ```
 
 ## Download
@@ -52,7 +53,8 @@ You can download the already compiled versions from the [releases section](https
 
 Example of use:
 
-![image](https://github.com/user-attachments/assets/6ceadbdb-34a9-4ccb-8c76-3b57dac83288)
+![image](https://github.com/user-attachments/assets/aacc367a-bdd4-454d-9baa-379f2a0e0f3c)
+
 
 ## How to Use
 
@@ -65,10 +67,9 @@ Example of use:
 
 ## Test
 
-Version 1.1.0 has been tested with a generic HDMI to USB capture card while playing Ninja Gaiden 3: Razor's Edge on a Nintendo Switch®.
+Version 1.2.0 has been tested with a generic HDMI to USB capture card while playing Ninja Gaiden 3: Razor's Edge on a Nintendo Switch®.
 
-![2024-09-05 23-49-42](https://github.com/user-attachments/assets/6a95084c-2b72-4b02-9046-8064787b0f77)
-
+![vlcsnap-2024-12-18-13h32m42s192](https://github.com/user-attachments/assets/b72747e2-6b5c-4775-a8b9-a823523602a8)
 
 ## Update Notification
 
